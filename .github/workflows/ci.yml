@@ -22,7 +22,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Prepare test environment
-        run: cp .env.example .env
+        run: |
+          cp .env.example .env
+          sed -i 's/DEMO_ADMIN_PASSWORD=.*/DEMO_ADMIN_PASSWORD=Admin@123/' .env
+          sed -i 's/DEMO_DOSEN_PASSWORD=.*/DEMO_DOSEN_PASSWORD=Dosen@123/' .env
+          sed -i 's/DEMO_MAHASISWA_PASSWORD=.*/DEMO_MAHASISWA_PASSWORD=Mhs@12345/' .env
       - name: Run automated tests
         run: pytest -q
 
@@ -42,16 +46,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Start temporary staging stack
-        run: docker compose -f deploy/staging/docker-compose.staging.yml up -d --build
+        run: |
+          cp deploy/staging/.env.staging.example deploy/staging/.env
+          docker compose --env-file deploy/staging/.env -f deploy/staging/docker-compose.staging.yml up -d --build
       - name: Wait and check health
         run: |
           for i in {1..30}; do
-            if curl -fsS http://localhost:8080/health; then exit 0; fi
+            if curl -fsS http://localhost:8000/health && curl -fsS http://localhost:8080/public/login.html >/dev/null; then exit 0; fi
             sleep 3
           done
-          docker compose -f deploy/staging/docker-compose.staging.yml ps
-          docker compose -f deploy/staging/docker-compose.staging.yml logs backend
+          docker compose --env-file deploy/staging/.env -f deploy/staging/docker-compose.staging.yml ps
+          docker compose --env-file deploy/staging/.env -f deploy/staging/docker-compose.staging.yml logs backend
           exit 1
       - name: Stop staging stack
         if: always()
-        run: docker compose -f deploy/staging/docker-compose.staging.yml down -v
+        run: docker compose --env-file deploy/staging/.env -f deploy/staging/docker-compose.staging.yml down -v
